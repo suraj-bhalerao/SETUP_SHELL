@@ -1,55 +1,71 @@
 #!/bin/bash
 
-# --- Define Variables ---
+# --- Define Constants ---
 USER_NAME="Sharukh"
 HOME_DIR="/home/$USER_NAME"
 CIAP_DIR="$HOME_DIR/CIAP"
-CIAP_RPI_DIR="$HOME_DIR/CIAP_RPI"
+SETUP_DIR="$CIAP_DIR/Setup_files"
+UPLOAD_SCRIPT="$CIAP_DIR/Upload_script"
 DESKTOP_DIR="$HOME_DIR/Desktop"
-GIT_REPO_URL="https://github.com/suraj-bhalerao/CIAP_RPI.git"
+GIT_REPO_URL="https://github.com/suraj-bhalerao/RPI_.git"
 RC_LOCAL="/etc/rc.local"
 AUTOSTART_DIR="/etc/xdg/autostart"
 SERVICE_NAME="onedrive-upload.service"
 SERVICE_PATH="/etc/systemd/system/$SERVICE_NAME"
-PYTHON_SCRIPT="$CIAP_DIR/one.py"
+PYTHON_SCRIPT="$UPLOAD_SCRIPT/one.py"
 
-# --- Update System ---
-echo "Updating system..."
+# --- Update & Install Essentials ---
+echo "🔄 Updating system..."
 sudo apt update && sudo apt upgrade -y
 
-# --- Create Directories ---
-echo "Creating directories..."
-mkdir -p "$CIAP_DIR"
-mkdir -p "$CIAP_RPI_DIR"
+echo "✅ Ensuring required packages..."
+sudo apt install -y git curl lsof
 
-# --- Pull from GitHub ---
-echo "Cloning/Updating Git repository..."
-cd "$CIAP_RPI_DIR" || exit
-git pull "$GIT_REPO_URL" || git clone "$GIT_REPO_URL" .
+# --- Clone or Pull Git Repository ---
+echo "📁 Setting up CIAP directory at $CIAP_DIR..."
+if [ -d "$CIAP_DIR/.git" ]; then
+    echo "🔁 Pulling latest changes..."
+    cd "$CIAP_DIR" && git pull
+else
+    echo "⬇️ Cloning repository..."
+    git clone "$GIT_REPO_URL" "$CIAP_DIR"
+fi
 
-# --- Copy AEP.sh to Desktop ---
-echo "Copying AEP.sh to Desktop..."
-sudo cp "$CIAP_RPI_DIR/AEP.sh" "$DESKTOP_DIR/"
-sudo chmod +x "$DESKTOP_DIR/AEP.sh"
+# --- Desktop Shortcut ---
+AEP_SCRIPT="$SETUP_DIR/AEP.sh"
+if [ -f "$AEP_SCRIPT" ]; then
+    echo "🖥️ Copying AEP.sh to Desktop..."
+    cp "$AEP_SCRIPT" "$DESKTOP_DIR/"
+    chmod +x "$DESKTOP_DIR/AEP.sh"
+fi
 
-# --- Copy Logger.py and one.py ---
-echo "Copying Logger.py and one.py to $CIAP_DIR..."
-sudo cp "$CIAP_RPI_DIR/Logger.py" "$CIAP_DIR/"
-sudo cp "$CIAP_RPI_DIR/one.py" "$CIAP_DIR/"
-sudo chmod +x "$PYTHON_SCRIPT"
+# --- Make Upload Script Executable ---
+if [ -f "$PYTHON_SCRIPT" ]; then
+    chmod +x "$PYTHON_SCRIPT"
+fi
 
-# --- Copy rc.local ---
-echo "Replacing rc.local..."
-sudo cp "$CIAP_RPI_DIR/rc.local" "$RC_LOCAL"
-sudo chmod +x "$RC_LOCAL"
+# --- Setup rc.local ---
+RC_LOCAL_SRC="$SETUP_DIR/rc.local"
+if [ -f "$RC_LOCAL_SRC" ]; then
+    echo "⚙️ Installing rc.local..."
+    sudo cp "$RC_LOCAL_SRC" "$RC_LOCAL"
+    sudo chmod +x "$RC_LOCAL"
+else
+    echo "⚠️ rc.local not found in $SETUP_DIR"
+fi
 
-# --- Copy .desktop file ---
-echo "Copying autostart desktop file..."
-sudo cp "$CIAP_RPI_DIR/atculogger.desktop" "$AUTOSTART_DIR/"
-sudo chmod +x "$AUTOSTART_DIR/atculogger.desktop"
+# --- Setup Autostart Entry ---
+AUTOSTART_DESKTOP="$SETUP_DIR/atculogger.desktop"
+if [ -f "$AUTOSTART_DESKTOP" ]; then
+    echo "🔧 Setting up autostart..."
+    sudo cp "$AUTOSTART_DESKTOP" "$AUTOSTART_DIR/"
+    sudo chmod +x "$AUTOSTART_DIR/atculogger.desktop"
+else
+    echo "⚠️ atculogger.desktop not found."
+fi
 
-# --- Create systemd service for one.py ---
-echo "Creating systemd service for one.py..."
+# --- Create Systemd Service ---
+echo "🛠️ Creating systemd service: $SERVICE_NAME"
 sudo bash -c "cat > $SERVICE_PATH" << EOF
 [Unit]
 Description=Upload RPi Logs to OneDrive
@@ -71,17 +87,19 @@ sudo systemctl daemon-reload
 sudo systemctl enable "$SERVICE_NAME"
 sudo systemctl start "$SERVICE_NAME"
 
-# --- Install rclone ---
-echo "Installing rclone..."
-sudo -v ; curl https://rclone.org/install.sh | sudo bash
+# --- Install rclone if Needed ---
+if ! command -v rclone &> /dev/null; then
+    echo "⬇️ Installing rclone..."
+    curl https://rclone.org/install.sh | sudo bash
+else
+    echo "✅ rclone already installed."
+fi
 
+# --- Final Message ---
 echo ""
 echo "======================================================="
-echo "RCLONE NOT YET CONFIGURED"
-echo "You still need to manually run: rclone config"
-echo "Follow the prompts to link your OneDrive account."
-echo "Once done, one.py will begin syncing."
-echo "NOTE : You have to manually configure the RPI-Connect"
+echo "✅ CIAP Setup Complete!"
+echo "⚠️  REMEMBER TO CONFIGURE RCLONE MANUALLY:"
+echo "    ➤ Run: rclone config"
+echo "    ➤ Link to your OneDrive account"
 echo "======================================================="
-
-echo "Setup complete!"
